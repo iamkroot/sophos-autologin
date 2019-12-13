@@ -1,89 +1,125 @@
-import requests
-import random
-import cuse
+#!/usr/bin/python
+import logging
 import os
+import random
 import time
+import psutil
+import requests
+from requests.exceptions import ConnectionError, SSLError, Timeout
+import cuse
 
+logging.getLogger("urllib3").setLevel(logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG, style="{", format="{asctime} - {levelname} - {message}"
+)
 RAND = True
-MIN_DATA = 200  # in MB
+MIN_DATA = 10  # in MB
+PORTAL_URL = "http://172.16.0.30:8090/httpclient.html"
+POLL_INTERVAL = 10  # in secs
+LOGINS_FILE = "cy_logins.csv"
 
 
-def read_logins(path='cy_logins.txt'):
+def read_logins(path=LOGINS_FILE):
     """Properly handle reading the logins."""
     if not os.path.isfile(path):
-        print(f'{path} not found! Quitting.')
-        exit(0)
-    with open(path, 'r') as f:
-        data = f.read()
-        if not data:  # in case the file is empty
-            print(f'{path} is empty. Add some logins first.')
-            exit(0)
-        return data.split('\n')
+        logging.critical(f"{path} not found! Quitting.")
+        exit(1)
+    with open(path, "r") as f:
+        lines = f.readlines()
+        logins = tuple(tuple(line.strip().split(",")) for line in lines[1:])
+    return logins
 
 
 def login(un, pwd):
-    url = 'http://172.16.0.30:8090/httpclient.html'
-    payload = {'mode': 191, 'username': un, 'password': pwd}
-    r = requests.post(url, payload)
+    payload = {"mode": 191, "username": un, "password": pwd}
+    r = requests.post(PORTAL_URL, payload, timeout=5)
     response = r.text.lower()
-    states = [
-        'logged in',
-        'exceeded',
-        'not log you on',
-        'maximum login limit'
-    ]
+    states = (
+        ("signed in", "logged in"),
+        ("exceeded"),
+        ("invalid user"),
+        ("maximum login limit"),
+    )
     for code, state in enumerate(states, 1):
-        if state in response:
+        if any(status in response for status in state):
             return code
     return r.text
 
 
-def try_login(logins: list):
-    for creds in logins:
-        logins.remove(creds)
-        un, pwd = creds.split(' ')
+def try_login(logins):
+    if RAND:
+        logins = random.sample(logins, k=len(logins))
+    for account in logins:
+        un, pwd = account
         status = login(un, pwd)
-        if status is 1:
-            return creds
-        elif status is 2:
-            print('Data limit exceeded for', un)
-        elif status is 3:
-            print('Creds incorrect for', un)
-        elif status is 4:
-            print('Maximum login limit reached for', un)
+        if status == 1:
+            logging.info("Logged in as " + un)
+            return account
+        elif status == 2:
+            logging.info("Data limit exceeded for " + un)
+        elif status == 3:
+            logging.warning("Creds incorrect for " + un)
+        elif status == 4:
+            logging.info("Maximum login limit reached for " + un)
         else:
-            print(status)
-            print('Quitting!')
-            exit(0)
-    print('All login IDs exhausted. Quitting.')
+            logging.debug(status)
+            logging.critical("Unknown error. Quitting!")
+            exit(1)
+    logging.error("All login IDs exhausted. Quitting.")
+    exit(2)
 
 
-def get_rem_data(un, pwd):
-    rem_data = cuse.get_rem_data(un, pwd)
-    print('Remaining data:', rem_data, 'MB')
-    return rem_data
+def get_net_used():
+    counter = psutil.net_io_counters()
+    return counter.bytes_sent + counter.bytes_recv
 
 
-def start_watching(un, pwd, rem_data):
-    while rem_data > MIN_DATA:
-        try:
-            time.sleep(170)  # update interval of cyberoam site
-        except KeyboardInterrupt:
-            print('Quitting!')
-            exit(0)
-        rem_data = get_rem_data(un, pwd)
+def net_accessible(retry_count=5):
+    if not retry_count:
+        logging.error("Couldn't connect to google")
+        return False
+    try:
+        requests.head("https://google.com", timeout=15)
+    except SSLError:
+        return False
+    except (ConnectionError, Timeout):
+        logging.warning("Conn Error")
+        return net_accessible(retry_count - 1)
+    else:
+        return True
+
+
+def get_used_data(used_data=0):
+    prev = get_net_used()
+    while True:
+        cur = get_net_used()
+        used_data += cur - prev
+        yield round(used_data / 1e6, 2)
+        prev = cur
 
 
 def main():
     logins = read_logins()
-    if RAND:
-        logins = random.sample(logins, len(logins))
+    used_data_gen = get_used_data()
     while True:
-        un, pwd = try_login(logins).split(' ')
-        rem_data = get_rem_data(un, pwd)
-        if rem_data > MIN_DATA:
-            start_watching(un, pwd, rem_data)
+        if not net_accessible():
+            logging.warning("Net not accessible.")
+            un, pwd = try_login(logins)
+            try:
+                rem_data = cuse.get_rem_data(un, pwd)
+            except TimeoutError:
+                logging.warning("Failed to retrieve remaining data.")
+            else:
+                logging.info(f"Remaining data {rem_data} MB")
+            used_data_gen = get_used_data()
+        used_data = next(used_data_gen)
+        logging.debug(f"Used data: {used_data} MB")
+        time.sleep(POLL_INTERVAL)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        logging.info("Stopped by user. Quitting!")
+        exit(0)
