@@ -1,0 +1,7 @@
+[general]
+portal_url = "http://172.16.0.30:8090/httpclient.html"
+poll_interval = 10  # in secs
+
+[creds]
+shuffle = true  # shuffle order in which logins are used
+logins_file = "cy_logins.csv"  # path to comma separated user_id,passwords file

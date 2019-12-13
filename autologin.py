@@ -5,28 +5,33 @@ import random
 import time
 import psutil
 import requests
+import toml
 from requests.exceptions import ConnectionError, SSLError, Timeout
 import cuse
+
+with open("config.toml") as f:
+    config = toml.load(f)
 
 logging.getLogger("urllib3").setLevel(logging.INFO)
 logging.basicConfig(
     level=logging.DEBUG, style="{", format="{asctime} - {levelname} - {message}"
 )
-RAND = True
-MIN_DATA = 10  # in MB
-PORTAL_URL = "http://172.16.0.30:8090/httpclient.html"
-POLL_INTERVAL = 10  # in secs
+PORTAL_URL = config["general"]["portal_url"]
+POLL_INTERVAL = config["general"]["poll_interval"]  # in secs
 LOGINS_FILE = "cy_logins.csv"
+SHUFFLE = True
 
 
-def read_logins(path=LOGINS_FILE):
+def read_logins(path):
     """Properly handle reading the logins."""
     if not os.path.isfile(path):
         logging.critical(f"{path} not found! Quitting.")
         exit(1)
     with open(path, "r") as f:
         lines = f.readlines()
-        logins = tuple(tuple(line.strip().split(",")) for line in lines[1:])
+        if lines[0].startwith("u"):
+            lines = lines[1:]
+        logins = tuple(tuple(line.strip().split(",")) for line in lines)
     return logins
 
 
@@ -47,8 +52,6 @@ def login(un, pwd):
 
 
 def try_login(logins):
-    if RAND:
-        logins = random.sample(logins, k=len(logins))
     for account in logins:
         un, pwd = account
         status = login(un, pwd)
@@ -99,7 +102,9 @@ def get_used_data(used_data=0):
 
 
 def main():
-    logins = read_logins()
+    logins = read_logins(LOGINS_FILE)
+    if SHUFFLE:
+        random.shuffle(logins)
     used_data_gen = get_used_data()
     while True:
         if not net_accessible():
