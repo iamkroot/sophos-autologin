@@ -29,7 +29,7 @@ def read_logins(path):
         exit(1)
     with open(path, "r") as f:
         lines = f.readlines()
-        if lines[0].startwith("u"):
+        if lines[0].startswith("u"):
             lines = lines[1:]
         logins = tuple(tuple(line.strip().split(",")) for line in lines)
     return logins
