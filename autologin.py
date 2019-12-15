@@ -18,8 +18,8 @@ logging.basicConfig(
 )
 PORTAL_URL = config["general"]["portal_url"]
 POLL_INTERVAL = config["general"]["poll_interval"]  # in secs
-LOGINS_FILE = "cy_logins.csv"
-SHUFFLE = True
+LOGINS_FILE = config["creds"]["logins_file"]
+SHUFFLE = config["creds"]["shuffle"]
 
 
 def read_logins(path):
@@ -29,9 +29,9 @@ def read_logins(path):
         exit(1)
     with open(path, "r") as f:
         lines = f.readlines()
-        if lines[0].startwith("u"):
+        if lines[0].startswith("u"):
             lines = lines[1:]
-        logins = tuple(tuple(line.strip().split(",")) for line in lines)
+        logins = list(line.strip().split(",") for line in lines)
     return logins
 
 
