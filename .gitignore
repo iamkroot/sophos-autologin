@@ -1,4 +1,5 @@
+__pycache__
+autologin.sublime-project
+autologin.sublime-workspace
 config.toml
-virtualenv/
-__pycache__/
 *.csv
