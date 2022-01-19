@@ -73,7 +73,7 @@ def try_login(logins):
 
 
 def get_net_used():
-    counter = psutil.net_io_counters()
+    counter = psutil.net_io_counters(nowrap=True)
     return counter.bytes_sent + counter.bytes_recv
 
 
