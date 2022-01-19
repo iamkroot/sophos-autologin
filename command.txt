@@ -1,0 +1,19 @@
+for i in (echo f && echo (superscript f))
+    for i2 in (echo 2 && echo (superscript 2))
+        for i3 in (echo 0 && echo (superscript 0))
+            for i4 in (echo 1 && echo (superscript 1))
+                for i5 in (echo 8 && echo (superscript 8))
+                    for i6 in (echo 0 && echo (superscript 0))
+                        for i7 in (echo 3 && echo (superscript 3))
+                            for i8 in (echo 0 && echo (superscript 0))
+                                for i9 in (echo 6 && echo (superscript 6))
+                                    echo $i$i2$i3$i4$i5$i6$i7$i8$i9",Arrestinal@neobydymium2001"
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end > cy_logins.csv
